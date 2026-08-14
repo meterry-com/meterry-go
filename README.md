@@ -54,6 +54,8 @@ The client exposes three main entry points:
 - `client.Query`
 - `client.Ingest`
 
+Metric-based analytics and bill queries should send explicit `Metrics` selectors, even for a single metric. The legacy singular `Metric` field on usage analytics requests is kept as a compatibility alias.
+
 For webhook signature verification, use:
 
 ```go

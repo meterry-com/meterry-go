@@ -2,6 +2,7 @@ package sdk
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"sort"
@@ -17,8 +18,10 @@ type QueryClient struct {
 }
 
 type ChartQuery struct {
-	ProjectID   string
-	Metric      string
+	ProjectID string
+	// Metric is a backward-compatible single-metric alias.
+	Metric string
+	// Metrics is the preferred explicit selector list.
 	Metrics     []string
 	Measure     string
 	BucketSize  string
@@ -41,24 +44,40 @@ type ChartPoint struct {
 }
 
 func (q *QueryClient) UsageForProject(ctx context.Context, projectID string, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
+	var err error
+	if req, err = normalizeAnalyticsQueryRequest(req); err != nil {
+		return nil, err
+	}
 	var out types.UsageAnalyticsQueryResponse
-	err := q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "query"), nil, req, &out)
 	return &out, err
 }
 
 func (q *QueryClient) BillForProject(ctx context.Context, projectID string, req types.UsageBillQueryRequest) (*types.UsageBillQueryResponse, error) {
+	var err error
+	if req, err = normalizeBillQueryRequest(req); err != nil {
+		return nil, err
+	}
 	var out types.UsageBillQueryResponse
-	err := q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "bills", "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "bills", "query"), nil, req, &out)
 	return &out, err
 }
 
 func (q *QueryClient) Report(ctx context.Context, projectID, reportID string, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
+	var err error
+	if req, err = normalizeAnalyticsQueryRequest(req); err != nil {
+		return nil, err
+	}
 	var out types.UsageAnalyticsQueryResponse
-	err := q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "reports", reportID, "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "reports", reportID, "query"), nil, req, &out)
 	return &out, err
 }
 
 func (q *QueryClient) Chart(ctx context.Context, req ChartQuery) ([]MetricSeries, error) {
+	var err error
+	if req, err = normalizeChartQuery(req); err != nil {
+		return nil, err
+	}
 	if len(req.Metrics) > 1 {
 		series := make([]MetricSeries, 0, len(req.Metrics))
 		for _, metric := range req.Metrics {
@@ -157,6 +176,66 @@ func chartSeriesFromRows(rows []types.UsageAnalyticsRow, measure string) []Metri
 		series = append(series, MetricSeries{Metric: metric, Points: points})
 	}
 	return series
+}
+
+func normalizeAnalyticsQueryRequest(req types.UsageAnalyticsQueryRequest) (types.UsageAnalyticsQueryRequest, error) {
+	metrics := normalizeMetricsSelector(req.Metric, req.Metrics)
+	if requiresMetricSelector(req.Measures) && len(metrics) == 0 {
+		return req, errors.New("metric or metrics is required for metric measures")
+	}
+	req.Metric = ""
+	req.Metrics = metrics
+	return req, nil
+}
+
+func normalizeBillQueryRequest(req types.UsageBillQueryRequest) (types.UsageBillQueryRequest, error) {
+	req.Metrics = normalizeMetricsSelector("", req.Metrics)
+	if len(req.Metrics) == 0 {
+		return req, errors.New("metrics are required for bill queries")
+	}
+	return req, nil
+}
+
+func normalizeChartQuery(req ChartQuery) (ChartQuery, error) {
+	req.Metrics = normalizeMetricsSelector(req.Metric, req.Metrics)
+	req.Metric = ""
+	if len(req.Metrics) == 0 {
+		return req, errors.New("metrics are required for chart queries")
+	}
+	return req, nil
+}
+
+func normalizeMetricsSelector(metric string, metrics []string) []string {
+	if len(metrics) > 0 {
+		result := make([]string, 0, len(metrics))
+		seen := make(map[string]struct{}, len(metrics))
+		for _, value := range metrics {
+			if value == "" {
+				continue
+			}
+			if _, ok := seen[value]; ok {
+				continue
+			}
+			seen[value] = struct{}{}
+			result = append(result, value)
+		}
+		return result
+	}
+	if metric == "" {
+		return nil
+	}
+	return []string{metric}
+}
+
+func requiresMetricSelector(measures []string) bool {
+	for _, measure := range measures {
+		switch measure {
+		case "usage_event_count", "event_count":
+		default:
+			return true
+		}
+	}
+	return false
 }
 
 func usageLogQuery(req types.ListUsageLogsRequest) url.Values {

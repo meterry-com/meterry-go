@@ -227,33 +227,36 @@ type ListUsageEventDetailsResponse struct {
 }
 
 type UsageAnalyticsQueryRequest struct {
-	ReportID    string            `json:"report_id,omitempty"`
-	BucketSize  string            `json:"bucket_size,omitempty"`
-	SubjectType string            `json:"subject_type,omitempty"`
-	SubjectID   string            `json:"subject_id,omitempty"`
-	Metric      string            `json:"metric,omitempty"`
-	Metrics     []string          `json:"metrics,omitempty"`
-	StartTime   int64             `json:"start_time,omitempty"`
-	EndTime     int64             `json:"end_time,omitempty"`
-	Filters     map[string]string `json:"filters,omitempty"`
-	GroupBy     []string          `json:"group_by,omitempty"`
-	Measures    []string          `json:"measures,omitempty"`
-	Limit       int               `json:"limit,omitempty"`
+	ReportID    string `json:"report_id,omitempty"`
+	BucketSize  string `json:"bucket_size,omitempty"`
+	SubjectType string `json:"subject_type,omitempty"`
+	SubjectID   string `json:"subject_id,omitempty"`
+	// Metric is a backward-compatible single-metric alias.
+	Metric string `json:"metric,omitempty"`
+	// Metrics is the preferred explicit selector list for metric-based queries.
+	Metrics   []string          `json:"metrics,omitempty"`
+	StartTime int64             `json:"start_time,omitempty"`
+	EndTime   int64             `json:"end_time,omitempty"`
+	Filters   map[string]string `json:"filters,omitempty"`
+	GroupBy   []string          `json:"group_by,omitempty"`
+	Measures  []string          `json:"measures,omitempty"`
+	Limit     int               `json:"limit,omitempty"`
 }
 
 type UsageBillQueryRequest struct {
-	BucketSize       string            `json:"bucket_size,omitempty"`
-	Timezone         string            `json:"timezone,omitempty"`
-	Cursor           string            `json:"cursor,omitempty"`
-	BillingAccountID string            `json:"billing_account_id,omitempty"`
-	SubjectType      string            `json:"subject_type,omitempty"`
-	SubjectID        string            `json:"subject_id,omitempty"`
-	Metrics          []string          `json:"metrics,omitempty"`
-	StartTime        int64             `json:"start_time,omitempty"`
-	EndTime          int64             `json:"end_time,omitempty"`
-	Filters          map[string]string `json:"filters,omitempty"`
-	GroupBy          []string          `json:"group_by,omitempty"`
-	Limit            int               `json:"limit,omitempty"`
+	BucketSize       string `json:"bucket_size,omitempty"`
+	Timezone         string `json:"timezone,omitempty"`
+	Cursor           string `json:"cursor,omitempty"`
+	BillingAccountID string `json:"billing_account_id,omitempty"`
+	SubjectType      string `json:"subject_type,omitempty"`
+	SubjectID        string `json:"subject_id,omitempty"`
+	// Metrics is required and must list the bill query's selected metrics.
+	Metrics   []string          `json:"metrics,omitempty"`
+	StartTime int64             `json:"start_time,omitempty"`
+	EndTime   int64             `json:"end_time,omitempty"`
+	Filters   map[string]string `json:"filters,omitempty"`
+	GroupBy   []string          `json:"group_by,omitempty"`
+	Limit     int               `json:"limit,omitempty"`
 }
 
 type UsageAnalyticsRow struct {

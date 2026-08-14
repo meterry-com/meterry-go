@@ -383,6 +383,58 @@ func TestQueryChartConvertsRowsToSeries(t *testing.T) {
 	}
 }
 
+func TestQueryUsageForProjectPromotesMetricToMetrics(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_001/usage/query" {
+			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
+		}
+		var req types.UsageAnalyticsQueryRequest
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			t.Fatal(err)
+		}
+		if req.Metric != "" || len(req.Metrics) != 1 || req.Metrics[0] != "input_tokens" {
+			t.Fatalf("request = %#v", req)
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"rows":[]}`))
+	}))
+	defer server.Close()
+
+	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "service_key"})
+	_, err := client.Query.UsageForProject(context.Background(), "proj_001", types.UsageAnalyticsQueryRequest{
+		Metric:    "input_tokens",
+		StartTime: 1785000000,
+		EndTime:   1785200000,
+		Measures:  []string{"quantity"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestQueryUsageForProjectRequiresMetricSelectorForMetricMeasures(t *testing.T) {
+	client := MustNewClient(Config{BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
+	_, err := client.Query.UsageForProject(context.Background(), "proj_001", types.UsageAnalyticsQueryRequest{
+		StartTime: 1785000000,
+		EndTime:   1785200000,
+		Measures:  []string{"quantity"},
+	})
+	if err == nil || !strings.Contains(err.Error(), "metric or metrics is required for metric measures") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
+func TestQueryBillForProjectRequiresMetrics(t *testing.T) {
+	client := MustNewClient(Config{BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
+	_, err := client.Query.BillForProject(context.Background(), "proj_001", types.UsageBillQueryRequest{
+		StartTime: 1785000000,
+		EndTime:   1785200000,
+	})
+	if err == nil || !strings.Contains(err.Error(), "metrics are required for bill queries") {
+		t.Fatalf("error = %v", err)
+	}
+}
+
 func TestQueryBillForProjectUsesDedicatedBillRoute(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_001/usage/bills/query" {
