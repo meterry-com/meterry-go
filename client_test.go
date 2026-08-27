@@ -66,8 +66,8 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 			_, _ = w.Write([]byte(`{"wallets":[{"id":"wallet_001","tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","currency":"USD","balance":"0","available_balance":"0","credit_limit":"0","status":"active"}]}`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallets/realtime/amount"):
 			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","currency":"USD","balance":"100","available_balance":"100","credit_limit":"0"}`))
-		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallets/realtime/limits"):
-			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","subject_type":"org","subject_id":"org_001","currency":"USD","limits":[]}`))
+		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/subject/realtime/limits"):
+			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","subject_type":"org","subject_id":"org_001","rule_account_id":"asub_001","limits":[{"rule_account_id":"asub_001","subject_type":"org","subject_id":"org_001","currency":"USD","metric_scope":"tokens","selector_type":"metric","selector_value":"input_tokens","measure":"quantity","period":"month","window_id":"2026-08","next_reset_at":1785686400,"used_amount":"1","limit_amount":"10","remaining_amount":"9","exceeded":false,"action":"block","webhook_event":"usage.monthly_tokens_exceeded"}]}`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallet-ledger-entries"):
 			_, _ = w.Write([]byte(`{"ledger_entries":[],"total_count":0,"limit":20,"offset":0}`))
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallets/credit"):
@@ -121,10 +121,22 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 	if _, err := client.Manager.ListWalletsForProject(ctx, projectID, ListWalletsRequest{AccountID: "acct_001"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ReadVirtualWalletAmountForProject(ctx, projectID, types.ReadVirtualWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
+	if snapshot, err := client.Manager.ReadVirtualWalletAmountForProject(ctx, projectID, types.ReadVirtualWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
 		t.Fatal(err)
+	} else if snapshot.AccountID != "acct_001" || snapshot.Balance.String() != "100" {
+		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	if _, err := client.Manager.ReadVirtualWalletLimitsForProject(ctx, projectID, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
+	if snapshot, err := client.Manager.ReadRealtimeWalletLimitsForProject(ctx, projectID, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
+		t.Fatal(err)
+	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	if snapshot, err := client.Manager.ReadVirtualWalletLimitsForProject(ctx, projectID, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
+		t.Fatal(err)
+	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	if _, err := client.Manager.ReadSubjectRealtimeLimitsForProject(ctx, projectID, types.ReadSubjectRealtimeLimitsRequest{SubjectType: "org", SubjectID: "org_001"}); err != nil {
 		t.Fatal(err)
 	}
 	if _, err := client.Manager.ListWalletLedgerEntriesForProject(ctx, projectID, types.ListWalletLedgerEntriesRequest{AccountID: "acct_001", Limit: 20}); err != nil {
@@ -179,7 +191,9 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 		"POST /v1/projects/proj_001/wallets",
 		"GET /v1/projects/proj_001/wallets?account_id=acct_001",
 		"GET /v1/projects/proj_001/wallets/realtime/amount?account_id=acct_001&currency=USD",
-		"GET /v1/projects/proj_001/wallets/realtime/limits?currency=USD&subject_id=org_001&subject_type=org",
+		"GET /v1/projects/proj_001/subject/realtime/limits?subject_id=org_001&subject_type=org",
+		"GET /v1/projects/proj_001/subject/realtime/limits?subject_id=org_001&subject_type=org",
+		"GET /v1/projects/proj_001/subject/realtime/limits?subject_id=org_001&subject_type=org",
 		"GET /v1/projects/proj_001/wallet-ledger-entries?account_id=acct_001&limit=20",
 		"POST /v1/projects/proj_001/wallets/credit",
 		"POST /v1/projects/proj_001/wallets/debit",

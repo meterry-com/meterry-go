@@ -54,6 +54,10 @@ The client exposes three main entry points:
 - `client.Query`
 - `client.Ingest`
 
+`client.Manager` includes project-scoped helpers for wallets, usage-control rules, and the subject realtime limits snapshot at `/v1/projects/:project_id/subject/realtime/limits`.
+`ReadRealtimeWalletLimitsForProject` and `ReadVirtualWalletLimitsForProject` are deprecated wrappers that preserve the legacy wallet-limits snapshot shape while sourcing from `ReadSubjectRealtimeLimitsForProject`.
+`ReadVirtualWalletAmountForProject` remains the realtime balance helper.
+
 Metric-based analytics and bill queries should send explicit `Metrics` selectors, even for a single metric. The legacy singular `Metric` field on usage analytics requests is kept as a compatibility alias.
 
 For webhook signature verification, use:

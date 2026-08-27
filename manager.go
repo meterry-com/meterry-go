@@ -156,17 +156,33 @@ func (m *ManagerClient) ReadVirtualWalletAmountForProject(ctx context.Context, p
 	return &out, err
 }
 
+// ReadRealtimeWalletLimitsForProject preserves the legacy wallet-limits
+// snapshot shape while sourcing data from the subject realtime limits API.
+// Deprecated: use ReadSubjectRealtimeLimitsForProject.
+func (m *ManagerClient) ReadRealtimeWalletLimitsForProject(ctx context.Context, projectID string, req types.ReadVirtualWalletRequest) (*types.VirtualWalletLimitsSnapshot, error) {
+	snapshot, err := m.ReadSubjectRealtimeLimitsForProject(ctx, projectID, types.ReadSubjectRealtimeLimitsRequest{
+		SubjectType: req.SubjectType,
+		SubjectID:   req.SubjectID,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return subjectRealtimeLimitsToVirtualWalletLimitsSnapshot(snapshot, req), nil
+}
+
+// ReadVirtualWalletLimitsForProject preserves the legacy wallet-limits
+// snapshot shape while sourcing data from the subject realtime limits API.
+// Deprecated: use ReadSubjectRealtimeLimitsForProject.
 func (m *ManagerClient) ReadVirtualWalletLimitsForProject(ctx context.Context, projectID string, req types.ReadVirtualWalletRequest) (*types.VirtualWalletLimitsSnapshot, error) {
+	return m.ReadRealtimeWalletLimitsForProject(ctx, projectID, req)
+}
+
+func (m *ManagerClient) ReadSubjectRealtimeLimitsForProject(ctx context.Context, projectID string, req types.ReadSubjectRealtimeLimitsRequest) (*types.SubjectRealtimeLimitsSnapshot, error) {
 	query := url.Values{}
-	addQuery(query, "account_id", req.AccountID)
 	addQuery(query, "subject_type", req.SubjectType)
 	addQuery(query, "subject_id", req.SubjectID)
-	addQuery(query, "currency", req.Currency)
-	addQuery(query, "scope_kind", req.ScopeKind)
-	addQuery(query, "scope_key", req.ScopeKey)
-	addQuery(query, "scope_value", req.ScopeValue)
-	var out types.VirtualWalletLimitsSnapshot
-	err := m.client.request(ctx, http.MethodGet, m.projectPath(projectID, "wallets", "realtime", "limits"), query, nil, &out)
+	var out types.SubjectRealtimeLimitsSnapshot
+	err := m.client.request(ctx, http.MethodGet, m.projectPath(projectID, "subject", "realtime", "limits"), query, nil, &out)
 	return &out, err
 }
 
@@ -190,6 +206,57 @@ func (m *ManagerClient) SetWalletCreditLimitForProject(ctx context.Context, proj
 	var out types.Wallet
 	err := m.client.request(ctx, http.MethodPost, m.projectPath(projectID, "wallets", "credit-limit"), nil, req, &out)
 	return &out, err
+}
+
+func subjectRealtimeLimitsToVirtualWalletLimitsSnapshot(snapshot *types.SubjectRealtimeLimitsSnapshot, req types.ReadVirtualWalletRequest) *types.VirtualWalletLimitsSnapshot {
+	if snapshot == nil {
+		return nil
+	}
+	out := &types.VirtualWalletLimitsSnapshot{
+		TenantID:      snapshot.TenantID,
+		ProjectID:     snapshot.ProjectID,
+		AccountID:     snapshot.AccountID,
+		SubjectType:   snapshot.SubjectType,
+		SubjectID:     snapshot.SubjectID,
+		RuleAccountID: snapshot.RuleAccountID,
+		Currency:      req.Currency,
+		ScopeKind:     req.ScopeKind,
+		ScopeKey:      req.ScopeKey,
+		ScopeValue:    req.ScopeValue,
+	}
+	if out.Currency == "" {
+		for _, item := range snapshot.Limits {
+			if item.Currency != "" {
+				out.Currency = item.Currency
+				break
+			}
+		}
+	}
+	out.Limits = make([]types.VirtualWalletLimitSnapshot, 0, len(snapshot.Limits))
+	for _, item := range snapshot.Limits {
+		if req.Currency != "" && item.Currency != "" && item.Currency != req.Currency {
+			continue
+		}
+		out.Limits = append(out.Limits, types.VirtualWalletLimitSnapshot{
+			RuleAccountID:   item.RuleAccountID,
+			SubjectType:     item.SubjectType,
+			SubjectID:       item.SubjectID,
+			Currency:        item.Currency,
+			MetricScope:     item.MetricScope,
+			SelectorType:    item.SelectorType,
+			SelectorValue:   item.SelectorValue,
+			Measure:         item.Measure,
+			Period:          item.Period,
+			WindowID:        item.WindowID,
+			UsedAmount:      item.UsedAmount,
+			LimitAmount:     item.LimitAmount,
+			RemainingAmount: item.RemainingAmount,
+			Exceeded:        item.Exceeded,
+			Action:          item.Action,
+			WebhookEvent:    item.WebhookEvent,
+		})
+	}
+	return out
 }
 
 func (m *ManagerClient) ListWalletLedgerEntriesForProject(ctx context.Context, projectID string, req types.ListWalletLedgerEntriesRequest) (*types.ListWalletLedgerEntriesResponse, error) {

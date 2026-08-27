@@ -558,6 +558,19 @@ type VirtualWalletLimitsSnapshot struct {
 	Limits        []VirtualWalletLimitSnapshot `json:"limits"`
 }
 
+// SubjectRealtimeLimitsSnapshot is the subject-owned realtime usage-control
+// view served by /subject/realtime/limits. The wallet amount is deliberately
+// not repeated here.
+type SubjectRealtimeLimitsSnapshot struct {
+	TenantID      string                     `json:"tenant_id"`
+	ProjectID     string                     `json:"project_id"`
+	AccountID     string                     `json:"account_id"`
+	SubjectType   string                     `json:"subject_type"`
+	SubjectID     string                     `json:"subject_id"`
+	RuleAccountID string                     `json:"rule_account_id,omitempty"`
+	Limits        []SubjectRealtimeLimitItem `json:"limits"`
+}
+
 type VirtualWalletLimitSnapshot struct {
 	RuleAccountID   string          `json:"rule_account_id,omitempty"`
 	SubjectType     string          `json:"subject_type,omitempty"`
@@ -576,6 +589,35 @@ type VirtualWalletLimitSnapshot struct {
 	Action          string          `json:"action,omitempty"`
 	WebhookEvent    string          `json:"webhook_event,omitempty"`
 	UsageVersion    int64           `json:"-"`
+}
+
+// SubjectRealtimeLimitItem mirrors the realtime limit rows returned by the
+// subject realtime limits endpoint.
+type SubjectRealtimeLimitItem struct {
+	RuleAccountID   string          `json:"rule_account_id,omitempty"`
+	SubjectType     string          `json:"subject_type,omitempty"`
+	SubjectID       string          `json:"subject_id,omitempty"`
+	DimensionKey    string          `json:"dimension_key,omitempty"`
+	DimensionValue  string          `json:"dimension_value,omitempty"`
+	Currency        string          `json:"currency"`
+	MetricScope     string          `json:"metric_scope"`
+	SelectorType    string          `json:"selector_type,omitempty"`
+	SelectorValue   string          `json:"selector_value,omitempty"`
+	Measure         string          `json:"measure,omitempty"`
+	Period          string          `json:"period"`
+	WindowID        string          `json:"window_id"`
+	NextResetAt     int64           `json:"next_reset_at,omitempty"`
+	UsedAmount      decimal.Decimal `json:"used_amount"`
+	LimitAmount     decimal.Decimal `json:"limit_amount"`
+	RemainingAmount decimal.Decimal `json:"remaining_amount"`
+	Exceeded        bool            `json:"exceeded"`
+	Action          string          `json:"action,omitempty"`
+	WebhookEvent    string          `json:"webhook_event,omitempty"`
+}
+
+type ReadSubjectRealtimeLimitsRequest struct {
+	SubjectType string `json:"subject_type"`
+	SubjectID   string `json:"subject_id"`
 }
 
 type CreateRuleAccountLimitRequest struct {
