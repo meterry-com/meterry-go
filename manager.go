@@ -13,6 +13,15 @@ type ManagerClient struct {
 	client *Client
 }
 
+// GrantSubject issues a short-lived subject JWT using a project-bound tenant
+// API key with the subject_jwt:grant scope. The server derives tenant and
+// project identity from the API key, rather than the configured project ID.
+func (m *ManagerClient) GrantSubject(ctx context.Context, req types.GrantSubjectRequest) (*types.GrantSubjectResponse, error) {
+	var out types.GrantSubjectResponse
+	err := m.client.request(ctx, http.MethodPost, m.client.apiPath("subject", "grants"), nil, req, &out)
+	return &out, err
+}
+
 type PublishResponse struct {
 	Status string `json:"status"`
 }

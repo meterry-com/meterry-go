@@ -46,7 +46,7 @@ func main() {
 - `HTTPClient`: optional custom HTTP client
 - `UserAgent`: optional custom user agent
 
-No tenant ID is needed at initialization. Tenant identity is authenticated by the API key; the SDK does not send a tenant header. All operations use the configured project automatically. Create a separate client for each tenant/project pair.
+No tenant ID is needed at initialization. Tenant identity is authenticated by the API key; the SDK does not send a tenant header. Project-scoped operations use the configured project automatically. Subject token grants derive the project from the API key, which must be bound to that project. Create a separate client for each tenant/project pair.
 
 If you prefer a panic-on-error constructor, use `sdk.MustNewClient(...)`.
 
@@ -69,6 +69,32 @@ account, err := client.Manager.CreateAccount(ctx, types.CreateAccountRequest{Nam
 ```
 
 Import `github.com/meterry-com/meterry-go/pkg/types` for request and response types.
+
+To issue a short-lived subject JWT, use a project-bound tenant API key with the
+`subject_jwt:grant` scope (`types.TenantAPIKeyScopeSubjectJWTGrant`):
+
+```go
+grant, err := client.Manager.GrantSubject(ctx, types.GrantSubjectRequest{
+	SubjectType: "user",
+	SubjectID:   "user_123",
+	Rules:       []string{"analysis"},
+	Metrics:     []string{"input_tokens", "output_tokens"},
+	ExpiresIn:   900,
+})
+if err != nil {
+	return err
+}
+token := grant.AccessToken
+```
+
+This calls `POST /v1/subject/grants`. The server derives tenant and project
+identity from the API key; use a key bound to the configured project. Fixed
+service API keys cannot issue subject tokens. `Rules` currently supports
+`analysis`. Omit `Metrics` to allow all metrics, or supply a nonempty list to
+restrict access. `ExpiresIn` is in seconds; omit it to use the server's default
+lifetime. The response includes `TokenType`, `AccessToken`, `ExpiresIn`,
+`ExpiresAt` (Unix seconds), `Subject`, `Rules`, and optional `Metrics`.
+
 This is a breaking API change: remove the `ForProject` suffix and the project ID argument from existing calls. Rule-set, report, event-listing, and ingest methods also use the configured project; `ChartQuery` no longer has a `ProjectID` field.
 
 Metric-based analytics and bill queries should send explicit `Metrics` selectors, even for a single metric. The legacy singular `Metric` field on usage analytics requests is kept as a compatibility alias.

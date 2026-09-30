@@ -22,7 +22,32 @@ const (
 	TenantAPIKeyScopeUsageControlWrite = "usage_control:write"
 	TenantAPIKeyScopeTenantAccessWrite = "tenant_access:write"
 	TenantAPIKeyScopeTenantAdmin       = "tenant:admin"
+	TenantAPIKeyScopeSubjectJWTGrant   = "subject_jwt:grant"
 )
+
+// GrantSubjectRequest specifies access for a short-lived subject token.
+// Omit Metrics to allow all metrics. ExpiresIn is in seconds; omit it to
+// use the server's default lifetime.
+type GrantSubjectRequest struct {
+	SubjectType string   `json:"subject_type" binding:"required"`
+	SubjectID   string   `json:"subject_id" binding:"required"`
+	Rules       []string `json:"rules" binding:"required"`
+	Metrics     []string `json:"metrics,omitempty"`
+	ExpiresIn   int64    `json:"expires_in,omitempty"`
+}
+
+type GrantSubjectResponse struct {
+	TokenType   string `json:"token_type"`
+	AccessToken string `json:"access_token"`
+	ExpiresIn   int64  `json:"expires_in"`
+	ExpiresAt   int64  `json:"expires_at"`
+	Subject     struct {
+		Type string `json:"type"`
+		ID   string `json:"id"`
+	} `json:"subject"`
+	Rules   []string `json:"rules"`
+	Metrics []string `json:"metrics,omitempty"`
+}
 
 type TenantAPIKey struct {
 	ID              string             `json:"id"`
