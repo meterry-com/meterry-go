@@ -31,25 +31,22 @@ type BatchIngestEvent struct {
 	IngestEvent
 }
 
-func (i *IngestClient) IngestRawEvent(ctx context.Context, projectID, extractorRuleSetID string, req types.IngestEventRequest) (*types.IngestEventResponse, error) {
+func (i *IngestClient) IngestRawEvent(ctx context.Context, extractorRuleSetID string, req types.IngestEventRequest) (*types.IngestEventResponse, error) {
 	if extractorRuleSetID == "" {
 		return nil, errors.New("extractor rule set id is required")
 	}
-	endpoint, err := i.ingestPath(projectID, extractorRuleSetID)
-	if err != nil {
-		return nil, err
-	}
+	endpoint := i.client.projectPath("extractor-rule-sets", extractorRuleSetID, "events", "ingest")
 	var out types.IngestEventResponse
-	err = i.client.request(ctx, http.MethodPost, endpoint, nil, req, &out)
+	err := i.client.request(ctx, http.MethodPost, endpoint, nil, req, &out)
 	return &out, err
 }
 
-func (i *IngestClient) Ingest(ctx context.Context, projectID, extractorRuleSetID string, event IngestEvent) (*types.IngestEventResponse, error) {
+func (i *IngestClient) Ingest(ctx context.Context, extractorRuleSetID string, event IngestEvent) (*types.IngestEventResponse, error) {
 	raw, err := BuildRawJSON(event.RawJSON, nil, event.PricingRuleSetID)
 	if err != nil {
 		return nil, err
 	}
-	return i.IngestRawEvent(ctx, projectID, extractorRuleSetID, types.IngestEventRequest{
+	return i.IngestRawEvent(ctx, extractorRuleSetID, types.IngestEventRequest{
 		Source:          event.Source,
 		ExternalEventID: event.ExternalEventID,
 		IdempotencyKey:  event.IdempotencyKey,
@@ -62,17 +59,14 @@ func (i *IngestClient) Ingest(ctx context.Context, projectID, extractorRuleSetID
 	})
 }
 
-func (i *IngestClient) BatchIngestRawEvents(ctx context.Context, projectID string, req types.BatchIngestEventsRequest) (*types.BatchIngestEventsResponse, error) {
-	endpoint, err := i.batchIngestPath(projectID)
-	if err != nil {
-		return nil, err
-	}
+func (i *IngestClient) BatchIngestRawEvents(ctx context.Context, req types.BatchIngestEventsRequest) (*types.BatchIngestEventsResponse, error) {
+	endpoint := i.client.projectPath("events", "batch-ingest")
 	var out types.BatchIngestEventsResponse
-	err = i.client.request(ctx, http.MethodPost, endpoint, nil, req, &out)
+	err := i.client.request(ctx, http.MethodPost, endpoint, nil, req, &out)
 	return &out, err
 }
 
-func (i *IngestClient) BatchIngest(ctx context.Context, projectID, source string, events []BatchIngestEvent) (*types.BatchIngestEventsResponse, error) {
+func (i *IngestClient) BatchIngest(ctx context.Context, source string, events []BatchIngestEvent) (*types.BatchIngestEventsResponse, error) {
 	requests := make([]types.BatchIngestEventRequest, 0, len(events))
 	for _, event := range events {
 		raw, err := BuildRawJSON(event.RawJSON, nil, event.PricingRuleSetID)
@@ -92,7 +86,7 @@ func (i *IngestClient) BatchIngest(ctx context.Context, projectID, source string
 			Metadata:           event.Metadata,
 		})
 	}
-	return i.BatchIngestRawEvents(ctx, projectID, types.BatchIngestEventsRequest{
+	return i.BatchIngestRawEvents(ctx, types.BatchIngestEventsRequest{
 		Source: source,
 		Events: requests,
 	})
@@ -136,18 +130,4 @@ func marshalRawObject(payload any) (json.RawMessage, error) {
 		}
 		return raw, nil
 	}
-}
-
-func (i *IngestClient) ingestPath(projectID, extractorRuleSetID string) (string, error) {
-	if projectID != "" {
-		return i.client.apiPath("projects", projectID, "extractor-rule-sets", extractorRuleSetID, "events", "ingest"), nil
-	}
-	return "", errors.New("project id is required for ingest")
-}
-
-func (i *IngestClient) batchIngestPath(projectID string) (string, error) {
-	if projectID != "" {
-		return i.client.apiPath("projects", projectID, "events", "batch-ingest"), nil
-	}
-	return "", errors.New("project id is required for batch ingest")
 }

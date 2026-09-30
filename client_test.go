@@ -28,10 +28,11 @@ func TestManagerUsesProjectPath(t *testing.T) {
 	defer server.Close()
 
 	client := MustNewClient(Config{
-		BaseURL: server.URL,
-		APIKey:  "service_key",
+		ProjectID: "proj_001",
+		BaseURL:   server.URL,
+		APIKey:    "service_key",
 	})
-	account, err := client.Manager.CreateAccountForProject(context.Background(), "proj_001", types.CreateAccountRequest{Name: "demo"})
+	account, err := client.Manager.CreateAccount(context.Background(), types.CreateAccountRequest{Name: "demo"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,6 +41,111 @@ func TestManagerUsesProjectPath(t *testing.T) {
 	}
 	if account.ID != "acct_001" {
 		t.Fatalf("account = %#v", account)
+	}
+}
+
+func TestNewClientRequiresScopeAndCredentials(t *testing.T) {
+	valid := Config{ProjectID: "proj_001", BaseURL: "https://api.meterry.com", APIKey: "service_key"}
+	tests := []struct {
+		name string
+		edit func(*Config)
+		want string
+	}{
+		{"project", func(c *Config) { c.ProjectID = " \t" }, "project id is required"},
+		{"api key", func(c *Config) { c.APIKey = " \t" }, "api key is required"},
+		{"base url", func(c *Config) { c.BaseURL = " \t" }, "base url is required"},
+		{"invalid base url", func(c *Config) { c.BaseURL = "://" }, "parse billing sdk base url"},
+		{"relative base url", func(c *Config) { c.BaseURL = "/api" }, "base url must include scheme and host"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			config := valid
+			tt.edit(&config)
+			client, err := NewClient(config)
+			if client != nil || err == nil || !strings.Contains(err.Error(), tt.want) {
+				t.Fatalf("NewClient = %v, %v; want %q", client, err, tt.want)
+			}
+		})
+	}
+}
+
+func TestClientsUseConfiguredProjectAndCredentials(t *testing.T) {
+	var requests []string
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		requests = append(requests, r.Method+" "+r.URL.Path+" "+r.Header.Get("Authorization"))
+		if r.Header.Get("X-Tenant-ID") != "" {
+			t.Error("tenant header is not supported by the API")
+		}
+		if r.Header.Get("User-Agent") != "test-sdk" {
+			t.Errorf("user agent = %q", r.Header.Get("User-Agent"))
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"rows":[{"dimensions":{"bucket":"1785000000"},"measures":{"quantity":"2"}}]}`))
+	}))
+	defer server.Close()
+
+	for _, project := range []string{"proj_alpha", "proj_beta"} {
+		config := Config{
+			ProjectID: " " + project + " ",
+			BaseURL:   " " + server.URL + "/gateway/ ", APIKey: " key_" + project + " ",
+			HTTPClient: server.Client(), UserAgent: "test-sdk",
+		}
+		client := MustNewClient(config)
+		if client.httpClient != config.HTTPClient {
+			t.Fatalf("client config not retained: %#v", client)
+		}
+		config.ProjectID = "proj_changed"
+		ctx := context.Background()
+		if _, err := client.Manager.CreateExtractorRuleSet(ctx, types.CreateExtractorRuleSetRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Query.Report(ctx, "report_001", types.UsageAnalyticsQueryRequest{Metrics: []string{"tokens"}, Measures: []string{"quantity"}}); err != nil {
+			t.Fatal(err)
+		}
+		if series, err := client.Query.Chart(ctx, ChartQuery{Metrics: []string{"tokens"}}); err != nil || len(series) != 1 {
+			t.Fatalf("Chart = %#v, %v", series, err)
+		}
+		if _, err := client.Query.ListProjectUsageEvents(ctx, types.ListUsageEventLogsRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Query.ListProjectUsageEventDetails(ctx, types.ListUsageEventLogsRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Query.ListUsageLogs(ctx, types.ListUsageLogsRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Ingest.IngestRawEvent(ctx, "ers_001", types.IngestEventRequest{}); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := client.Ingest.BatchIngestRawEvents(ctx, types.BatchIngestEventsRequest{}); err != nil {
+			t.Fatal(err)
+		}
+	}
+	want := make([]string, 0)
+	for _, project := range []string{"proj_alpha", "proj_beta"} {
+		for _, route := range []struct{ method, suffix string }{
+			{http.MethodPost, "extractor-rule-sets"},
+			{http.MethodPost, "reports/report_001/query"},
+			{http.MethodPost, "usage/query"},
+			{http.MethodGet, "usage/events"},
+			{http.MethodGet, "usage/events/details"},
+			{http.MethodGet, "usage-logs"},
+			{http.MethodPost, "extractor-rule-sets/ers_001/events/ingest"},
+			{http.MethodPost, "events/batch-ingest"},
+		} {
+			want = append(want, route.method+" /gateway/v1/projects/"+project+"/"+route.suffix+" Bearer key_"+project)
+		}
+	}
+	if strings.Join(requests, "\n") != strings.Join(want, "\n") {
+		t.Fatalf("requests = %v; want %v", requests, want)
+	}
+}
+
+func TestIngestRequiresExtractorRuleSetID(t *testing.T) {
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: "http://127.0.0.1:8080", APIKey: "usage_key"})
+	_, err := client.Ingest.Ingest(context.Background(), "", IngestEvent{})
+	if err == nil || !strings.Contains(err.Error(), "extractor rule set id is required") {
+		t.Fatalf("ingest err = %v", err)
 	}
 }
 
@@ -67,7 +173,7 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallets/realtime/amount"):
 			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","currency":"USD","balance":"100","available_balance":"100","credit_limit":"0"}`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/subject/realtime/limits"):
-			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","subject_type":"org","subject_id":"org_001","rule_account_id":"asub_001","limits":[{"rule_account_id":"asub_001","subject_type":"org","subject_id":"org_001","currency":"USD","metric_scope":"tokens","selector_type":"metric","selector_value":"input_tokens","measure":"quantity","period":"month","window_id":"2026-08","next_reset_at":1785686400,"used_amount":"1","limit_amount":"10","remaining_amount":"9","exceeded":false,"action":"block","webhook_event":"usage.monthly_tokens_exceeded"}]}`))
+			_, _ = w.Write([]byte(`{"tenant_id":"t_001","project_id":"proj_001","account_id":"acct_001","subject_type":"org","subject_id":"org_001","rule_account_id":"asub_001","limits":[{"id":"racl_001","rule_account_id":"asub_001","subject_type":"org","subject_id":"org_001","currency":"USD","metric_scope":"tokens","selector_type":"metric","selector_value":"input_tokens","measure":"quantity","period":"month","window_id":"2026-08","next_reset_at":1785686400,"used_amount":"1","limit_amount":"10","remaining_amount":"9","exceeded":false,"action":"block","webhook_event":"usage.monthly_tokens_exceeded"}]}`))
 		case r.Method == http.MethodGet && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallet-ledger-entries"):
 			_, _ = w.Write([]byte(`{"ledger_entries":[],"total_count":0,"limit":20,"offset":0}`))
 		case r.Method == http.MethodPost && strings.HasSuffix(r.URL.Path, "/projects/proj_001/wallets/credit"):
@@ -99,68 +205,69 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "service_key"})
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: server.URL, APIKey: "service_key"})
 	ctx := context.Background()
-	projectID := "proj_001"
 
-	if _, err := client.Manager.CreateAccountForProject(ctx, projectID, types.CreateAccountRequest{Name: "ACME"}); err != nil {
+	if _, err := client.Manager.CreateAccount(ctx, types.CreateAccountRequest{Name: "ACME"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListAccountsForProject(ctx, projectID); err != nil {
+	if _, err := client.Manager.ListAccounts(ctx); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.BindSubjectForProject(ctx, projectID, types.BindAccountSubjectRequest{AccountID: "acct_001", SubjectType: "org", SubjectID: "org_001"}); err != nil {
+	if _, err := client.Manager.BindSubject(ctx, types.BindAccountSubjectRequest{AccountID: "acct_001", SubjectType: "org", SubjectID: "org_001"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListAccountSubjectsForProject(ctx, projectID, "acct_001"); err != nil {
+	if _, err := client.Manager.ListAccountSubjects(ctx, "acct_001"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.CreateWalletForProject(ctx, projectID, types.CreateWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
+	if _, err := client.Manager.CreateWallet(ctx, types.CreateWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListWalletsForProject(ctx, projectID, ListWalletsRequest{AccountID: "acct_001"}); err != nil {
+	if _, err := client.Manager.ListWallets(ctx, ListWalletsRequest{AccountID: "acct_001"}); err != nil {
 		t.Fatal(err)
 	}
-	if snapshot, err := client.Manager.ReadVirtualWalletAmountForProject(ctx, projectID, types.ReadVirtualWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
+	if snapshot, err := client.Manager.ReadVirtualWalletAmount(ctx, types.ReadVirtualWalletRequest{AccountID: "acct_001", Currency: "USD"}); err != nil {
 		t.Fatal(err)
 	} else if snapshot.AccountID != "acct_001" || snapshot.Balance.String() != "100" {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	if snapshot, err := client.Manager.ReadRealtimeWalletLimitsForProject(ctx, projectID, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
+	if snapshot, err := client.Manager.ReadRealtimeWalletLimits(ctx, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
 		t.Fatal(err)
-	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" {
+	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" || snapshot.Limits[0].ID != "racl_001" {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	if snapshot, err := client.Manager.ReadVirtualWalletLimitsForProject(ctx, projectID, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
+	if snapshot, err := client.Manager.ReadVirtualWalletLimits(ctx, types.ReadVirtualWalletRequest{SubjectType: "org", SubjectID: "org_001", Currency: "USD"}); err != nil {
 		t.Fatal(err)
-	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" {
+	} else if snapshot.SubjectID != "org_001" || snapshot.Currency != "USD" || len(snapshot.Limits) != 1 || snapshot.Limits[0].MetricScope != "tokens" || snapshot.Limits[0].ID != "racl_001" {
 		t.Fatalf("snapshot = %#v", snapshot)
 	}
-	if _, err := client.Manager.ReadSubjectRealtimeLimitsForProject(ctx, projectID, types.ReadSubjectRealtimeLimitsRequest{SubjectType: "org", SubjectID: "org_001"}); err != nil {
+	if snapshot, err := client.Manager.ReadSubjectRealtimeLimits(ctx, types.ReadSubjectRealtimeLimitsRequest{SubjectType: "org", SubjectID: "org_001"}); err != nil {
+		t.Fatal(err)
+	} else if len(snapshot.Limits) != 1 || snapshot.Limits[0].ID != "racl_001" {
+		t.Fatalf("snapshot = %#v", snapshot)
+	}
+	if _, err := client.Manager.ListWalletLedgerEntries(ctx, types.ListWalletLedgerEntriesRequest{AccountID: "acct_001", Limit: 20}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListWalletLedgerEntriesForProject(ctx, projectID, types.ListWalletLedgerEntriesRequest{AccountID: "acct_001", Limit: 20}); err != nil {
+	if _, err := client.Manager.CreditWallet(ctx, types.CreditWalletRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("100")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.CreditWalletForProject(ctx, projectID, types.CreditWalletRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("100")}); err != nil {
+	if _, err := client.Manager.DebitWallet(ctx, types.DebitWalletRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("10")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.DebitWalletForProject(ctx, projectID, types.DebitWalletRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("10")}); err != nil {
+	if _, err := client.Manager.SetWalletCreditLimit(ctx, types.SetWalletCreditLimitRequest{AccountID: "acct_001", Currency: "USD", CreditLimit: decimal.RequireFromString("50")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.SetWalletCreditLimitForProject(ctx, projectID, types.SetWalletCreditLimitRequest{AccountID: "acct_001", Currency: "USD", CreditLimit: decimal.RequireFromString("50")}); err != nil {
+	if _, err := client.Manager.CreateVoucherGrant(ctx, types.CreateVoucherGrantRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("20")}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.CreateVoucherGrantForProject(ctx, projectID, types.CreateVoucherGrantRequest{AccountID: "acct_001", Currency: "USD", Amount: decimal.RequireFromString("20")}); err != nil {
+	if _, err := client.Manager.ListVoucherGrants(ctx, ListVoucherGrantsRequest{AccountID: "acct_001", Currency: "USD", Limit: 10}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListVoucherGrantsForProject(ctx, projectID, ListVoucherGrantsRequest{AccountID: "acct_001", Currency: "USD", Limit: 10}); err != nil {
+	if _, err := client.Manager.RevokeVoucherGrant(ctx, "vg_001"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.RevokeVoucherGrantForProject(ctx, projectID, "vg_001"); err != nil {
-		t.Fatal(err)
-	}
-	if _, err := client.Manager.CreateUsageControlRuleForProject(ctx, projectID, types.CreateUsageControlRuleRequest{
+	if _, err := client.Manager.CreateUsageControlRule(ctx, types.CreateUsageControlRuleRequest{
 		BillingAccountID: "acct_001",
 		SubjectType:      "org",
 		SubjectID:        "org_001",
@@ -173,13 +280,13 @@ func TestManagerProjectScopedAccountWalletAndLimitOperations(t *testing.T) {
 	}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.ListUsageControlRulesForProject(ctx, projectID, "acct_001"); err != nil {
+	if _, err := client.Manager.ListUsageControlRules(ctx, "acct_001"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := client.Manager.DeleteRuleAccountLimitForProject(ctx, projectID, "racl_001"); err != nil {
+	if _, err := client.Manager.DeleteRuleAccountLimit(ctx, "racl_001"); err != nil {
 		t.Fatal(err)
 	}
-	if lease, err := client.Manager.CreateBudgetLeaseForProject(ctx, projectID, types.CreateBudgetLeaseRequest{RunID: "run_001"}); err != nil || lease.ID != "ble_001" {
+	if lease, err := client.Manager.CreateBudgetLease(ctx, types.CreateBudgetLeaseRequest{RunID: "run_001"}); err != nil || lease.ID != "ble_001" {
 		t.Fatalf("lease=%#v err=%v", lease, err)
 	}
 
@@ -235,8 +342,8 @@ func TestIngestBuildsXBillingPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "usage_key"})
-	_, err := client.Ingest.Ingest(context.Background(), "proj_001", "ers_001", IngestEvent{
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: server.URL, APIKey: "usage_key"})
+	_, err := client.Ingest.Ingest(context.Background(), "ers_001", IngestEvent{
 		Source:      "gateway",
 		SubjectType: "organization",
 		SubjectID:   "org_001",
@@ -275,24 +382,6 @@ func TestIngestBuildsXBillingPayload(t *testing.T) {
 	}
 }
 
-func TestIngestRequiresProjectID(t *testing.T) {
-	client := MustNewClient(Config{BaseURL: "http://127.0.0.1:8080", APIKey: "usage_key"})
-	_, err := client.Ingest.Ingest(context.Background(), "", "ers_001", IngestEvent{Source: "gateway", RawJSON: map[string]any{"usage": map[string]any{"requests": 1}}})
-	if err == nil || !strings.Contains(err.Error(), "project id is required for ingest") {
-		t.Fatalf("ingest err = %v", err)
-	}
-	_, err = client.Ingest.BatchIngest(context.Background(), "", "gateway", []BatchIngestEvent{{
-		ExtractorRuleSetID: "ers_001",
-		IngestEvent: IngestEvent{
-			IdempotencyKey: "req_001",
-			RawJSON:        map[string]any{"usage": map[string]any{"requests": 1}},
-		},
-	}})
-	if err == nil || !strings.Contains(err.Error(), "project id is required for batch ingest") {
-		t.Fatalf("batch ingest err = %v", err)
-	}
-}
-
 func TestBatchIngestBuildsProjectPayload(t *testing.T) {
 	var body map[string]any
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -312,8 +401,8 @@ func TestBatchIngestBuildsProjectPayload(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "usage_key"})
-	resp, err := client.Ingest.BatchIngest(context.Background(), "proj_001", "gateway", []BatchIngestEvent{
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: server.URL, APIKey: "usage_key"})
+	resp, err := client.Ingest.BatchIngest(context.Background(), "gateway", []BatchIngestEvent{
 		{
 			ExtractorRuleSetID: "ers_001",
 			IngestEvent: IngestEvent{
@@ -397,7 +486,7 @@ func TestQueryChartConvertsRowsToSeries(t *testing.T) {
 	}
 }
 
-func TestQueryUsageForProjectPromotesMetricToMetrics(t *testing.T) {
+func TestQueryUsagePromotesMetricToMetrics(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_001/usage/query" {
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
@@ -414,8 +503,8 @@ func TestQueryUsageForProjectPromotesMetricToMetrics(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "service_key"})
-	_, err := client.Query.UsageForProject(context.Background(), "proj_001", types.UsageAnalyticsQueryRequest{
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: server.URL, APIKey: "service_key"})
+	_, err := client.Query.Usage(context.Background(), types.UsageAnalyticsQueryRequest{
 		Metric:    "input_tokens",
 		StartTime: 1785000000,
 		EndTime:   1785200000,
@@ -426,9 +515,9 @@ func TestQueryUsageForProjectPromotesMetricToMetrics(t *testing.T) {
 	}
 }
 
-func TestQueryUsageForProjectRequiresMetricSelectorForMetricMeasures(t *testing.T) {
-	client := MustNewClient(Config{BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
-	_, err := client.Query.UsageForProject(context.Background(), "proj_001", types.UsageAnalyticsQueryRequest{
+func TestQueryUsageRequiresMetricSelectorForMetricMeasures(t *testing.T) {
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
+	_, err := client.Query.Usage(context.Background(), types.UsageAnalyticsQueryRequest{
 		StartTime: 1785000000,
 		EndTime:   1785200000,
 		Measures:  []string{"quantity"},
@@ -438,9 +527,9 @@ func TestQueryUsageForProjectRequiresMetricSelectorForMetricMeasures(t *testing.
 	}
 }
 
-func TestQueryBillForProjectRequiresMetrics(t *testing.T) {
-	client := MustNewClient(Config{BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
-	_, err := client.Query.BillForProject(context.Background(), "proj_001", types.UsageBillQueryRequest{
+func TestQueryBillRequiresMetrics(t *testing.T) {
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: "http://127.0.0.1:8080", APIKey: "service_key"})
+	_, err := client.Query.Bill(context.Background(), types.UsageBillQueryRequest{
 		StartTime: 1785000000,
 		EndTime:   1785200000,
 	})
@@ -449,7 +538,7 @@ func TestQueryBillForProjectRequiresMetrics(t *testing.T) {
 	}
 }
 
-func TestQueryBillForProjectUsesDedicatedBillRoute(t *testing.T) {
+func TestQueryBillUsesDedicatedBillRoute(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodPost || r.URL.Path != "/v1/projects/proj_001/usage/bills/query" {
 			t.Fatalf("request = %s %s", r.Method, r.URL.Path)
@@ -466,8 +555,8 @@ func TestQueryBillForProjectUsesDedicatedBillRoute(t *testing.T) {
 	}))
 	defer server.Close()
 
-	client := MustNewClient(Config{BaseURL: server.URL, APIKey: "service_key"})
-	resp, err := client.Query.BillForProject(context.Background(), "proj_001", types.UsageBillQueryRequest{
+	client := MustNewClient(Config{ProjectID: "proj_001", BaseURL: server.URL, APIKey: "service_key"})
+	resp, err := client.Query.Bill(context.Background(), types.UsageBillQueryRequest{
 		BucketSize:       "5m",
 		Timezone:         "Asia/Shanghai",
 		BillingAccountID: "acct_001",

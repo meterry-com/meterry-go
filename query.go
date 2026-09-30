@@ -18,7 +18,6 @@ type QueryClient struct {
 }
 
 type ChartQuery struct {
-	ProjectID string
 	// Metric is a backward-compatible single-metric alias.
 	Metric string
 	// Metrics is the preferred explicit selector list.
@@ -43,33 +42,33 @@ type ChartPoint struct {
 	Value decimal.Decimal `json:"value"`
 }
 
-func (q *QueryClient) UsageForProject(ctx context.Context, projectID string, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
+func (q *QueryClient) Usage(ctx context.Context, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
 	var err error
 	if req, err = normalizeAnalyticsQueryRequest(req); err != nil {
 		return nil, err
 	}
 	var out types.UsageAnalyticsQueryResponse
-	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.projectPath("usage", "query"), nil, req, &out)
 	return &out, err
 }
 
-func (q *QueryClient) BillForProject(ctx context.Context, projectID string, req types.UsageBillQueryRequest) (*types.UsageBillQueryResponse, error) {
+func (q *QueryClient) Bill(ctx context.Context, req types.UsageBillQueryRequest) (*types.UsageBillQueryResponse, error) {
 	var err error
 	if req, err = normalizeBillQueryRequest(req); err != nil {
 		return nil, err
 	}
 	var out types.UsageBillQueryResponse
-	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "usage", "bills", "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.projectPath("usage", "bills", "query"), nil, req, &out)
 	return &out, err
 }
 
-func (q *QueryClient) Report(ctx context.Context, projectID, reportID string, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
+func (q *QueryClient) Report(ctx context.Context, reportID string, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
 	var err error
 	if req, err = normalizeAnalyticsQueryRequest(req); err != nil {
 		return nil, err
 	}
 	var out types.UsageAnalyticsQueryResponse
-	err = q.client.request(ctx, http.MethodPost, q.client.apiPath("projects", projectID, "reports", reportID, "query"), nil, req, &out)
+	err = q.client.request(ctx, http.MethodPost, q.client.projectPath("reports", reportID, "query"), nil, req, &out)
 	return &out, err
 }
 
@@ -117,31 +116,31 @@ func (q *QueryClient) chartSingleMetric(ctx context.Context, req ChartQuery) ([]
 		Measures:    []string{measure},
 		Limit:       req.Limit,
 	}
-	resp, err := q.UsageForProject(ctx, req.ProjectID, analyticsReq)
+	resp, err := q.Usage(ctx, analyticsReq)
 	if err != nil {
 		return nil, err
 	}
 	return chartSeriesFromRows(resp.Rows, measure), nil
 }
 
-func (q *QueryClient) ListUsageLogsForProject(ctx context.Context, projectID string, req types.ListUsageLogsRequest) (*types.ListUsageLogsResponse, error) {
+func (q *QueryClient) ListUsageLogs(ctx context.Context, req types.ListUsageLogsRequest) (*types.ListUsageLogsResponse, error) {
 	query := usageLogQuery(req)
 	var out types.ListUsageLogsResponse
-	err := q.client.request(ctx, http.MethodGet, q.client.apiPath("projects", projectID, "usage-logs"), query, nil, &out)
+	err := q.client.request(ctx, http.MethodGet, q.client.projectPath("usage-logs"), query, nil, &out)
 	return &out, err
 }
 
-func (q *QueryClient) ListProjectUsageEvents(ctx context.Context, projectID string, req types.ListUsageEventLogsRequest) (*types.ListUsageEventLogsResponse, error) {
+func (q *QueryClient) ListProjectUsageEvents(ctx context.Context, req types.ListUsageEventLogsRequest) (*types.ListUsageEventLogsResponse, error) {
 	query := usageEventLogQuery(req)
 	var out types.ListUsageEventLogsResponse
-	err := q.client.request(ctx, http.MethodGet, q.client.apiPath("projects", projectID, "usage", "events"), query, nil, &out)
+	err := q.client.request(ctx, http.MethodGet, q.client.projectPath("usage", "events"), query, nil, &out)
 	return &out, err
 }
 
-func (q *QueryClient) ListProjectUsageEventDetails(ctx context.Context, projectID string, req types.ListUsageEventLogsRequest) (*types.ListUsageEventDetailsResponse, error) {
+func (q *QueryClient) ListProjectUsageEventDetails(ctx context.Context, req types.ListUsageEventLogsRequest) (*types.ListUsageEventDetailsResponse, error) {
 	query := usageEventLogQuery(req)
 	var out types.ListUsageEventDetailsResponse
-	err := q.client.request(ctx, http.MethodGet, q.client.apiPath("projects", projectID, "usage", "events", "details"), query, nil, &out)
+	err := q.client.request(ctx, http.MethodGet, q.client.projectPath("usage", "events", "details"), query, nil, &out)
 	return &out, err
 }
 

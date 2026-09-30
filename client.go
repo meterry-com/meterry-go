@@ -16,7 +16,10 @@ import (
 
 const defaultUserAgent = "edgefn-billing-go-sdk"
 
+// Config binds a client to one project.
+// APIKey identifies the tenant and must authorize access to ProjectID.
 type Config struct {
+	ProjectID  string
 	BaseURL    string
 	APIKey     string
 	HTTPClient *http.Client
@@ -28,6 +31,7 @@ type Client struct {
 	Query   *QueryClient
 	Ingest  *IngestClient
 
+	projectID  string
 	baseURL    *url.URL
 	apiKey     string
 	httpClient *http.Client
@@ -46,13 +50,23 @@ func NewClient(config Config) (*Client, error) {
 	if parsed.Scheme == "" || parsed.Host == "" {
 		return nil, errors.New("billing sdk base url must include scheme and host")
 	}
+	projectID := strings.TrimSpace(config.ProjectID)
+	if projectID == "" {
+		return nil, errors.New("billing sdk project id is required")
+	}
+	apiKey := strings.TrimSpace(config.APIKey)
+	if apiKey == "" {
+		return nil, errors.New("billing sdk api key is required")
+	}
+
 	httpClient := config.HTTPClient
 	if httpClient == nil {
 		httpClient = &http.Client{Timeout: 10 * time.Second}
 	}
 	client := &Client{
+		projectID:  projectID,
 		baseURL:    parsed,
-		apiKey:     strings.TrimSpace(config.APIKey),
+		apiKey:     apiKey,
 		httpClient: httpClient,
 		userAgent:  firstNonEmpty(config.UserAgent, defaultUserAgent),
 	}
@@ -118,6 +132,10 @@ func (c *Client) request(ctx context.Context, method, endpoint string, query url
 		return fmt.Errorf("decode billing response: %w", err)
 	}
 	return nil
+}
+
+func (c *Client) projectPath(parts ...string) string {
+	return c.apiPath(append([]string{"projects", c.projectID}, parts...)...)
 }
 
 func (c *Client) apiPath(parts ...string) string {

@@ -378,9 +378,11 @@ type RuleAccountLimit struct {
 }
 
 type ListUsageControlRulesRequest struct {
-	AccountID string `json:"account_id"`
-	Limit     int    `json:"limit,omitempty"`
-	Offset    int    `json:"offset,omitempty"`
+	AccountID   string `json:"account_id,omitempty"`
+	SubjectType string `json:"subject_type,omitempty"`
+	SubjectID   string `json:"subject_id,omitempty"`
+	Limit       int    `json:"limit,omitempty"`
+	Offset      int    `json:"offset,omitempty"`
 }
 
 type ListUsageControlRulesResponse struct {
@@ -572,6 +574,7 @@ type SubjectRealtimeLimitsSnapshot struct {
 }
 
 type VirtualWalletLimitSnapshot struct {
+	ID              string          `json:"id,omitempty"`
 	RuleAccountID   string          `json:"rule_account_id,omitempty"`
 	SubjectType     string          `json:"subject_type,omitempty"`
 	SubjectID       string          `json:"subject_id,omitempty"`
@@ -594,6 +597,7 @@ type VirtualWalletLimitSnapshot struct {
 // SubjectRealtimeLimitItem mirrors the realtime limit rows returned by the
 // subject realtime limits endpoint.
 type SubjectRealtimeLimitItem struct {
+	ID              string          `json:"id,omitempty"`
 	RuleAccountID   string          `json:"rule_account_id,omitempty"`
 	SubjectType     string          `json:"subject_type,omitempty"`
 	SubjectID       string          `json:"subject_id,omitempty"`

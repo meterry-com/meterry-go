@@ -37,6 +37,7 @@ func TestSubjectRealtimeLimitsPublicSnapshotRedactsImplementationFields(t *testi
 		SubjectType: "user",
 		SubjectID:   "user_001",
 		Limits: []SubjectRealtimeLimitItem{{
+			ID:              "racl_001",
 			RuleAccountID:   "asub_001",
 			SubjectType:     "user",
 			SubjectID:       "user_001",
@@ -63,6 +64,9 @@ func TestSubjectRealtimeLimitsPublicSnapshotRedactsImplementationFields(t *testi
 	}
 	if strings.Contains(string(raw), `"usage_version"`) || strings.Contains(string(raw), `"scale"`) {
 		t.Fatalf("public subject realtime snapshot leaked implementation fields: %s", string(raw))
+	}
+	if !strings.Contains(string(raw), `"id":"racl_001"`) {
+		t.Fatalf("subject realtime snapshot omitted limit ID: %s", string(raw))
 	}
 	if !strings.Contains(string(raw), `"next_reset_at":1234567890`) {
 		t.Fatalf("subject realtime snapshot omitted next_reset_at: %s", string(raw))
