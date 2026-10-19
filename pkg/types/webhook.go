@@ -14,6 +14,7 @@ const (
 	WebhookEventTypeWalletBalanceChanged          WebhookEventType = "wallet.balance_changed"
 	WebhookEventTypeWalletBalanceThresholdCrossed WebhookEventType = "wallet.available_balance.threshold_crossed"
 	WebhookEventTypeUsageLimitExhausted           WebhookEventType = "usage_limit.exhausted"
+	WebhookEventTypeUsageLimitRecovered           WebhookEventType = "usage_limit.recovered"
 	WebhookEventTypeBudgetLeaseExhausted          WebhookEventType = "budget_lease.exhausted"
 )
 

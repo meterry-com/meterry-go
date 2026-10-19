@@ -59,7 +59,6 @@ The client exposes three main entry points:
 - `client.Ingest`
 
 `client.Manager` includes project-scoped helpers for wallets, usage-control rules, and the subject realtime limits snapshot at `/v1/projects/:project_id/subject/realtime/limits`.
-`ReadRealtimeWalletLimits` and `ReadVirtualWalletLimits` are deprecated wrappers that preserve the legacy wallet-limits snapshot shape while sourcing from `ReadSubjectRealtimeLimits`.
 `ReadVirtualWalletAmount` remains the realtime balance helper.
 
 For example, create an account without passing a project ID:
@@ -99,11 +98,71 @@ This is a breaking API change: remove the `ForProject` suffix and the project ID
 
 Metric-based analytics and bill queries should send explicit `Metrics` selectors, even for a single metric. The legacy singular `Metric` field on usage analytics requests is kept as a compatibility alias.
 
+## Import, update, and reset usage limits
+
+Use the custom limit ID (`racl_…`) returned in `limits[]`. Each method uses the
+configured project. Import `github.com/shopspring/decimal` for decimal amounts.
+
+```go
+// Import a lifetime limit's absolute used baseline.
+op, err := client.Manager.ImportSubjectUsage(ctx, types.ImportSubjectUsageRequest{
+	LimitID:        limitID,
+	UsedAmount:     decimal.RequireFromString("125.50"),
+	CoveredBefore: cutoffUnixSeconds,
+	IdempotencyKey: "migration-key-a",
+})
+if err != nil {
+	return err
+}
+status, err := client.Manager.GetSubjectUsageImport(ctx, op.ID)
+if err != nil {
+	return err
+}
+fmt.Println(status.Status) // pending or applied
+
+cap := decimal.NewFromInt(-1)
+_, err = client.Manager.UpdateUsageControlLimit(ctx, limitID,
+	types.UpdateUsageControlLimitRequest{LimitAmount: &cap})
+if err != nil {
+	return err
+}
+_, err = client.Manager.ResetUsageControlLimit(ctx, limitID,
+	types.CreateUsageLimitResetRequest{
+		Reason: "Support reset", IdempotencyKey: "reset-key-a",
+	})
+if err != nil {
+	return err
+}
+```
+
+`CoveredBefore` is an exclusive Unix-second boundary: the baseline covers events
+before it; events at or after it continue accumulating. Finite periods require
+the exact current `WindowStart` and `WindowEnd`; lifetime imports omit both.
+To replace a baseline, set `ExpectedImportID` to the previous import ID. Retry
+imports with the same request and idempotency key. An activation failure returns
+an `APIError` whose `Body` retains the accepted operation for recovery.
+
+Cap changes preserve used; changing the period resets only the edited rule.
+`-1` keeps counting without a finite cap; `0` represents an exhausted limit.
+Update fields are pointers: nil leaves a field unchanged, while a pointer to
+zero or an empty string sends that value explicitly. Creation and plan rule
+types also expose `PeriodType` and `InitAmount`.
+
+## Webhooks
+
 For webhook signature verification, use:
 
 ```go
 err := sdk.VerifyWebhookRequest(req, body, secret)
 ```
+
+After verifying the signature, decode limit notifications with
+`types.UsageLimitWebhookPayload`. Both `types.WebhookEventTypeUsageLimitExhausted`
+and `types.WebhookEventTypeUsageLimitRecovered` carry `Subject` and `Limit`;
+`Limit.DimensionKey` and `Limit.DimensionValue` identify a configured key, and
+`Subject.ID` identifies the member. Recovery notifications also include
+`Recovery.Reason` and `Recovery.RecoveredAt`. Manual resets do not emit recovered
+notifications.
 
 ## Wallet credit remarks
 

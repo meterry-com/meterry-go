@@ -300,3 +300,36 @@ func (m *ManagerClient) CreateBudgetLease(ctx context.Context, req types.CreateB
 func (m *ManagerClient) projectPath(parts ...string) string {
 	return m.client.projectPath(parts...)
 }
+
+// ImportSubjectUsage imports or replaces the absolute used baseline of one
+// custom limit. Reuse the request and idempotency key when retrying.
+func (m *ManagerClient) ImportSubjectUsage(ctx context.Context, req types.ImportSubjectUsageRequest) (*types.SubjectUsageImport, error) {
+	var out types.SubjectUsageImport
+	err := m.client.request(ctx, http.MethodPost, m.projectPath("subject", "usage-imports"), nil, req, &out)
+	return &out, err
+}
+
+// GetSubjectUsageImport returns the accepted import and its application status.
+func (m *ManagerClient) GetSubjectUsageImport(ctx context.Context, id string) (*types.SubjectUsageImport, error) {
+	var out types.SubjectUsageImport
+	err := m.client.request(ctx, http.MethodGet, m.projectPath("subject", "usage-imports", id), nil, nil, &out)
+	return &out, err
+}
+
+// UpdateUsageControlLimit updates one custom limit. Cap changes preserve used;
+// period changes reset only the edited limit.
+func (m *ManagerClient) UpdateUsageControlLimit(ctx context.Context, id string, req types.UpdateUsageControlLimitRequest) (*types.RuleAccountLimit, error) {
+	var out types.RuleAccountLimit
+	err := m.client.request(ctx, http.MethodPatch, m.projectPath("usage-control-rules", "limits", id), nil, req, &out)
+	return &out, err
+}
+
+// ResetUsageControlLimit resets only the given limit, overriding Scope and
+// TargetID in req. Manual resets do not emit recovered webhooks.
+func (m *ManagerClient) ResetUsageControlLimit(ctx context.Context, id string, req types.CreateUsageLimitResetRequest) (*types.UsageLimitResetOperation, error) {
+	var out types.UsageLimitResetOperation
+	req.Scope = types.UsageLimitResetScopeLimit
+	req.TargetID = id
+	err := m.client.request(ctx, http.MethodPost, m.projectPath("usage-limit-resets"), nil, req, &out)
+	return &out, err
+}

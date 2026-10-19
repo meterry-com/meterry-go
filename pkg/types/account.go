@@ -142,6 +142,8 @@ type UsageLimitPlanRule struct {
 	SelectorValue string          `json:"selector_value,omitempty"`
 	MetricScope   string          `json:"metric_scope,omitempty"`
 	Period        string          `json:"period"`
+	PeriodType    string          `json:"period_type"`
+	InitAmount    decimal.Decimal `json:"init_amount"`
 	LimitAmount   decimal.Decimal `json:"limit_amount"`
 	Timezone      string          `json:"timezone,omitempty"`
 	Action        string          `json:"action,omitempty"`
@@ -155,6 +157,7 @@ const (
 	UsageLimitResetScopeBillingAccount UsageLimitResetScope = "billing_account"
 	UsageLimitResetScopePlan           UsageLimitResetScope = "usage_limit_plan"
 	UsageLimitResetScopeSubjectRoute   UsageLimitResetScope = "subject_route"
+	UsageLimitResetScopeLimit          UsageLimitResetScope = "usage_control_limit"
 )
 
 // UsageLimitResetOperation defines a scoped event-time boundary for the
@@ -174,9 +177,10 @@ type UsageLimitResetOperation struct {
 }
 
 type CreateUsageLimitResetRequest struct {
-	Scope    UsageLimitResetScope `json:"scope,omitempty"`
-	TargetID string               `json:"target_id,omitempty"`
-	Reason   string               `json:"reason,omitempty"`
+	IdempotencyKey string               `json:"idempotency_key,omitempty"`
+	Scope          UsageLimitResetScope `json:"scope,omitempty"`
+	TargetID       string               `json:"target_id,omitempty"`
+	Reason         string               `json:"reason,omitempty"`
 }
 
 type CreateUsageLimitResetCommand struct {
@@ -204,6 +208,8 @@ type UsageLimitPlanRuleRequest struct {
 	SelectorValue string          `json:"selector_value,omitempty"`
 	MetricScope   string          `json:"metric_scope,omitempty"`
 	Period        string          `json:"period"`
+	PeriodType    string          `json:"period_type"`
+	InitAmount    decimal.Decimal `json:"init_amount"`
 	LimitAmount   decimal.Decimal `json:"limit_amount"`
 	Timezone      string          `json:"timezone,omitempty"`
 	Action        string          `json:"action,omitempty"`
@@ -369,6 +375,8 @@ type RuleAccountLimit struct {
 	SelectorValue  string                 `json:"selector_value,omitempty"`
 	Measure        string                 `json:"measure,omitempty"`
 	Period         string                 `json:"period"`
+	PeriodType     string                 `json:"period_type"`
+	InitAmount     decimal.Decimal        `json:"init_amount"`
 	LimitAmount    decimal.Decimal        `json:"limit_amount"`
 	Timezone       string                 `json:"timezone,omitempty"`
 	Action         string                 `json:"action,omitempty"`
@@ -595,6 +603,7 @@ type VirtualWalletLimitSnapshot struct {
 	Action          string          `json:"action,omitempty"`
 	WebhookEvent    string          `json:"webhook_event,omitempty"`
 	UsageVersion    int64           `json:"-"`
+	PeriodType      string          `json:"period_type"`
 }
 
 // SubjectRealtimeLimitItem mirrors the realtime limit rows returned by the
@@ -620,6 +629,7 @@ type SubjectRealtimeLimitItem struct {
 	Exceeded        bool            `json:"exceeded"`
 	Action          string          `json:"action,omitempty"`
 	WebhookEvent    string          `json:"webhook_event,omitempty"`
+	PeriodType      string          `json:"period_type"`
 }
 
 type ReadSubjectRealtimeLimitsRequest struct {
@@ -636,6 +646,8 @@ type CreateRuleAccountLimitRequest struct {
 	SelectorValue  string          `json:"selector_value,omitempty"`
 	Measure        string          `json:"measure,omitempty"`
 	Period         string          `json:"period"`
+	PeriodType     string          `json:"period_type"`
+	InitAmount     decimal.Decimal `json:"init_amount"`
 	LimitAmount    decimal.Decimal `json:"limit_amount"`
 	Timezone       string          `json:"timezone,omitempty"`
 	Action         string          `json:"action,omitempty"`
