@@ -291,6 +291,7 @@ type WalletLedgerEntry struct {
 	BalanceAfter   decimal.Decimal `json:"balance_after"`
 	SourceType     string          `json:"source_type,omitempty"`
 	SourceID       string          `json:"source_id,omitempty"`
+	Remark         string          `json:"remark,omitempty"`
 	IdempotencyKey string          `json:"idempotency_key,omitempty"`
 	UsageVersion   int64           `json:"usage_version,omitempty"`
 	CreatedAt      int64           `json:"created_at"`
@@ -455,6 +456,7 @@ type CreditWalletRequest struct {
 	Amount         decimal.Decimal `json:"amount"`
 	SourceType     string          `json:"source_type,omitempty"`
 	SourceID       string          `json:"source_id,omitempty"`
+	Remark         string          `json:"remark,omitempty"`
 	IdempotencyKey string          `json:"idempotency_key,omitempty"`
 }
 
@@ -473,6 +475,7 @@ type CreateVoucherGrantRequest struct {
 	SourceType     string          `json:"source_type,omitempty"`
 	SourceID       string          `json:"source_id,omitempty"`
 	IdempotencyKey string          `json:"idempotency_key,omitempty"`
+	Remark         string          `json:"remark,omitempty"`
 }
 
 type CreateVoucherGrantResponse struct {

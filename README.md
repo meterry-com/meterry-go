@@ -105,6 +105,26 @@ For webhook signature verification, use:
 err := sdk.VerifyWebhookRequest(req, body, secret)
 ```
 
+## Wallet credit remarks
+
+`CreditWallet` and its `TopUpWallet` alias accept an optional `Remark` to explain a credit. `SourceID` remains the identifier of the related business record.
+
+```go
+credit, err := client.Manager.CreditWallet(ctx, types.CreditWalletRequest{
+    AccountID:      "acct_001",
+    Currency:       "USD",
+    Amount:         decimal.RequireFromString("100.00"),
+    SourceType:     "manual_topup",
+    SourceID:       "payment_001",
+    Remark:         "Record a confirmed customer bank transfer",
+    IdempotencyKey: "topup:payment_001",
+})
+```
+
+The service trims leading and trailing whitespace and allows up to 500 Unicode characters. Remarks are visible to ledger readers; avoid internal sensitive information. An empty remark is omitted from JSON. Credit responses and `ListWalletLedgerEntries` expose the stored value as `WalletLedgerEntry.Remark`. A retry with the same idempotency key preserves the original remark. Legacy entries without this field decode with an empty remark.
+
+`CreateVoucherGrant` also accepts `types.CreateVoucherGrantRequest.Remark`. The reason is stored only on the credit `WalletLedgerEntry.Remark` and can be read through the create response or `ListWalletLedgerEntries`. Voucher grant records and `ListVoucherGrants` contain funding state, without remarks. The same optional-field, 500-character, whitespace-trimming, visibility, and idempotency rules apply.
+
 ## Official docs
 
 [Meterry Go SDK documentation](https://meterry.com/docs/sdk/go/)

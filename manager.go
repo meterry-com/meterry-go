@@ -165,25 +165,12 @@ func (m *ManagerClient) ReadVirtualWalletAmount(ctx context.Context, req types.R
 	return &out, err
 }
 
-// ReadRealtimeWalletLimits preserves the legacy wallet-limits
-// snapshot shape while sourcing data from the subject realtime limits API.
-// Deprecated: use ReadSubjectRealtimeLimits.
-func (m *ManagerClient) ReadRealtimeWalletLimits(ctx context.Context, req types.ReadVirtualWalletRequest) (*types.VirtualWalletLimitsSnapshot, error) {
-	snapshot, err := m.ReadSubjectRealtimeLimits(ctx, types.ReadSubjectRealtimeLimitsRequest{
-		SubjectType: req.SubjectType,
-		SubjectID:   req.SubjectID,
+func (m *ManagerClient) ReadSubjectRealtimeAmount(ctx context.Context, subjectType, subjectID, currency string) (*types.VirtualWalletAmountSnapshot, error) {
+	return m.ReadVirtualWalletAmount(ctx, types.ReadVirtualWalletRequest{
+		SubjectType: subjectType,
+		SubjectID:   subjectID,
+		Currency:    currency,
 	})
-	if err != nil {
-		return nil, err
-	}
-	return subjectRealtimeLimitsToVirtualWalletLimitsSnapshot(snapshot, req), nil
-}
-
-// ReadVirtualWalletLimits preserves the legacy wallet-limits
-// snapshot shape while sourcing data from the subject realtime limits API.
-// Deprecated: use ReadSubjectRealtimeLimits.
-func (m *ManagerClient) ReadVirtualWalletLimits(ctx context.Context, req types.ReadVirtualWalletRequest) (*types.VirtualWalletLimitsSnapshot, error) {
-	return m.ReadRealtimeWalletLimits(ctx, req)
 }
 
 func (m *ManagerClient) ReadSubjectRealtimeLimits(ctx context.Context, req types.ReadSubjectRealtimeLimitsRequest) (*types.SubjectRealtimeLimitsSnapshot, error) {
@@ -215,58 +202,6 @@ func (m *ManagerClient) SetWalletCreditLimit(ctx context.Context, req types.SetW
 	var out types.Wallet
 	err := m.client.request(ctx, http.MethodPost, m.projectPath("wallets", "credit-limit"), nil, req, &out)
 	return &out, err
-}
-
-func subjectRealtimeLimitsToVirtualWalletLimitsSnapshot(snapshot *types.SubjectRealtimeLimitsSnapshot, req types.ReadVirtualWalletRequest) *types.VirtualWalletLimitsSnapshot {
-	if snapshot == nil {
-		return nil
-	}
-	out := &types.VirtualWalletLimitsSnapshot{
-		TenantID:      snapshot.TenantID,
-		ProjectID:     snapshot.ProjectID,
-		AccountID:     snapshot.AccountID,
-		SubjectType:   snapshot.SubjectType,
-		SubjectID:     snapshot.SubjectID,
-		RuleAccountID: snapshot.RuleAccountID,
-		Currency:      req.Currency,
-		ScopeKind:     req.ScopeKind,
-		ScopeKey:      req.ScopeKey,
-		ScopeValue:    req.ScopeValue,
-	}
-	if out.Currency == "" {
-		for _, item := range snapshot.Limits {
-			if item.Currency != "" {
-				out.Currency = item.Currency
-				break
-			}
-		}
-	}
-	out.Limits = make([]types.VirtualWalletLimitSnapshot, 0, len(snapshot.Limits))
-	for _, item := range snapshot.Limits {
-		if req.Currency != "" && item.Currency != "" && item.Currency != req.Currency {
-			continue
-		}
-		out.Limits = append(out.Limits, types.VirtualWalletLimitSnapshot{
-			ID:              item.ID,
-			RuleAccountID:   item.RuleAccountID,
-			SubjectType:     item.SubjectType,
-			SubjectID:       item.SubjectID,
-			Currency:        item.Currency,
-			MetricScope:     item.MetricScope,
-			SelectorType:    item.SelectorType,
-			SelectorValue:   item.SelectorValue,
-			Measure:         item.Measure,
-			Period:          item.Period,
-			WindowID:        item.WindowID,
-			UsedAmount:      item.UsedAmount,
-			LimitAmount:     item.LimitAmount,
-			RemainingAmount: item.RemainingAmount,
-			Exceeded:        item.Exceeded,
-			Action:          item.Action,
-			WebhookEvent:    item.WebhookEvent,
-		})
-	}
-	return out
 }
 
 func (m *ManagerClient) ListWalletLedgerEntries(ctx context.Context, req types.ListWalletLedgerEntriesRequest) (*types.ListWalletLedgerEntriesResponse, error) {
@@ -324,15 +259,6 @@ func (m *ManagerClient) CreateUsageControlRule(ctx context.Context, req types.Cr
 
 func (m *ManagerClient) ListUsageControlRules(ctx context.Context, accountID string) ([]types.CreateUsageControlRuleResponse, error) {
 	return m.listUsageControlRules(ctx, types.ListUsageControlRulesRequest{AccountID: accountID})
-}
-
-// ListUsageControlRulesForAccountSubject lists manageable rules for
-// one subject route. The service applies the subject filter and returns the
-// concrete limit IDs needed by DeleteRuleAccountLimit.
-func (m *ManagerClient) ListUsageControlRulesBySubject(ctx context.Context, subjectType, subjectID string) ([]types.CreateUsageControlRuleResponse, error) {
-	return m.listUsageControlRules(ctx, types.ListUsageControlRulesRequest{
-		SubjectType: subjectType, SubjectID: subjectID,
-	})
 }
 
 func (m *ManagerClient) listUsageControlRules(ctx context.Context, req types.ListUsageControlRulesRequest) ([]types.CreateUsageControlRuleResponse, error) {

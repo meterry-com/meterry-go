@@ -54,6 +54,7 @@ type CreditWalletCommand struct {
 	Amount         decimal.Decimal
 	SourceType     string
 	SourceID       string
+	Remark         string
 	IdempotencyKey string
 }
 
@@ -79,6 +80,7 @@ type CreateVoucherGrantCommand struct {
 	SourceType     string
 	SourceID       string
 	IdempotencyKey string
+	Remark         string
 }
 
 type ListVoucherGrantsCommand struct {
