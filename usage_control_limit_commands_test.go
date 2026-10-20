@@ -21,30 +21,6 @@ func TestManagerUsageControlLimitCommands(t *testing.T) {
 		want                               any
 	}{
 		{
-			name: "import lifetime baseline", method: http.MethodPost, path: "/subject/usage-imports",
-			body:     `{"limit_id":"racl_a","used_amount":"123.456789","covered_before":100,"idempotency_key":"migration"}`,
-			response: `{"id":"usi_a","tenant_id":"t","project_id":"p","limit_id":"racl_a","used_amount":"123.456789","covered_before":100,"idempotency_key":"migration","status":"pending","created_at":101}`,
-			call: func(c *Client) (any, error) {
-				return c.Manager.ImportSubjectUsage(ctx, types.ImportSubjectUsageRequest{LimitID: "racl_a", UsedAmount: decimal.RequireFromString("123.456789"), CoveredBefore: 100, IdempotencyKey: "migration"})
-			},
-			want: &types.SubjectUsageImport{ID: "usi_a", TenantID: "t", ProjectID: "p", ImportSubjectUsageRequest: types.ImportSubjectUsageRequest{LimitID: "racl_a", UsedAmount: decimal.RequireFromString("123.456789"), CoveredBefore: 100, IdempotencyKey: "migration"}, Status: "pending", CreatedAt: 101},
-		},
-		{
-			name: "replace finite baseline", method: http.MethodPost, path: "/subject/usage-imports",
-			body:     `{"limit_id":"racl_a","used_amount":"0","covered_before":100,"window_start":90,"window_end":200,"expected_import_id":"usi_previous","idempotency_key":"replacement"}`,
-			response: `{"id":"usi_b","status":"applied","applied_at":102}`,
-			call: func(c *Client) (any, error) {
-				return c.Manager.ImportSubjectUsage(ctx, types.ImportSubjectUsageRequest{LimitID: "racl_a", UsedAmount: decimal.Zero, CoveredBefore: 100, WindowStart: 90, WindowEnd: 200, ExpectedImportID: "usi_previous", IdempotencyKey: "replacement"})
-			},
-			want: &types.SubjectUsageImport{ID: "usi_b", Status: "applied", AppliedAt: 102},
-		},
-		{
-			name: "get import", method: http.MethodGet, path: "/subject/usage-imports/usi_a",
-			response: `{"id":"usi_a","limit_id":"racl_a","used_amount":"123.456789","status":"applied","applied_at":102}`,
-			call:     func(c *Client) (any, error) { return c.Manager.GetSubjectUsageImport(ctx, "usi_a") },
-			want:     &types.SubjectUsageImport{ID: "usi_a", ImportSubjectUsageRequest: types.ImportSubjectUsageRequest{LimitID: "racl_a", UsedAmount: decimal.RequireFromString("123.456789")}, Status: "applied", AppliedAt: 102},
-		},
-		{
 			name: "unlimited cap", method: http.MethodPatch, path: "/usage-control-rules/limits/racl_a",
 			body: `{"limit_amount":"-1"}`, response: `{"id":"racl_a","limit_amount":"-1","period_type":"calendar","init_amount":"12.345678"}`,
 			call: func(c *Client) (any, error) {

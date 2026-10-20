@@ -98,30 +98,14 @@ This is a breaking API change: remove the `ForProject` suffix and the project ID
 
 Metric-based analytics and bill queries should send explicit `Metrics` selectors, even for a single metric. The legacy singular `Metric` field on usage analytics requests is kept as a compatibility alias.
 
-## Import, update, and reset usage limits
+## Create, update, and reset usage limits
 
 Use the custom limit ID (`racl_…`) returned in `limits[]`. Each method uses the
 configured project. Import `github.com/shopspring/decimal` for decimal amounts.
 
 ```go
-// Import a lifetime limit's absolute used baseline.
-op, err := client.Manager.ImportSubjectUsage(ctx, types.ImportSubjectUsageRequest{
-	LimitID:        limitID,
-	UsedAmount:     decimal.RequireFromString("125.50"),
-	CoveredBefore: cutoffUnixSeconds,
-	IdempotencyKey: "migration-key-a",
-})
-if err != nil {
-	return err
-}
-status, err := client.Manager.GetSubjectUsageImport(ctx, op.ID)
-if err != nil {
-	return err
-}
-fmt.Println(status.Status) // pending or applied
-
 cap := decimal.NewFromInt(-1)
-_, err = client.Manager.UpdateUsageControlLimit(ctx, limitID,
+_, err := client.Manager.UpdateUsageControlLimit(ctx, limitID,
 	types.UpdateUsageControlLimitRequest{LimitAmount: &cap})
 if err != nil {
 	return err
@@ -135,12 +119,9 @@ if err != nil {
 }
 ```
 
-`CoveredBefore` is an exclusive Unix-second boundary: the baseline covers events
-before it; events at or after it continue accumulating. Finite periods require
-the exact current `WindowStart` and `WindowEnd`; lifetime imports omit both.
-To replace a baseline, set `ExpectedImportID` to the previous import ID. Retry
-imports with the same request and idempotency key. An activation failure returns
-an `APIError` whose `Body` retains the accepted operation for recovery.
+Set `InitAmount` when creating a limit with `CreateUsageControlRule`. To correct
+the initial usage, delete the limit with `DeleteRuleAccountLimit` and create it
+again with the corrected `InitAmount`. Use the new limit ID returned in `limits[]`.
 
 Cap changes preserve used; changing the period resets only the edited rule.
 `-1` keeps counting without a finite cap; `0` represents an exhausted limit.

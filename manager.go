@@ -301,21 +301,6 @@ func (m *ManagerClient) projectPath(parts ...string) string {
 	return m.client.projectPath(parts...)
 }
 
-// ImportSubjectUsage imports or replaces the absolute used baseline of one
-// custom limit. Reuse the request and idempotency key when retrying.
-func (m *ManagerClient) ImportSubjectUsage(ctx context.Context, req types.ImportSubjectUsageRequest) (*types.SubjectUsageImport, error) {
-	var out types.SubjectUsageImport
-	err := m.client.request(ctx, http.MethodPost, m.projectPath("subject", "usage-imports"), nil, req, &out)
-	return &out, err
-}
-
-// GetSubjectUsageImport returns the accepted import and its application status.
-func (m *ManagerClient) GetSubjectUsageImport(ctx context.Context, id string) (*types.SubjectUsageImport, error) {
-	var out types.SubjectUsageImport
-	err := m.client.request(ctx, http.MethodGet, m.projectPath("subject", "usage-imports", id), nil, nil, &out)
-	return &out, err
-}
-
 // UpdateUsageControlLimit updates one custom limit. Cap changes preserve used;
 // period changes reset only the edited limit.
 func (m *ManagerClient) UpdateUsageControlLimit(ctx context.Context, id string, req types.UpdateUsageControlLimitRequest) (*types.RuleAccountLimit, error) {
