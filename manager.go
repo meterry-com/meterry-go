@@ -282,6 +282,16 @@ func (m *ManagerClient) listUsageControlRules(ctx context.Context, req types.Lis
 	}
 }
 
+// UpdateRuleAccountLimit changes only an active custom rule's upper limit.
+// The server updates the realtime ceiling immediately and returns the rule's
+// current progress without resetting usage or changing its window. Plan rules
+// cannot be updated through this method. Requires usage_control:write.
+func (m *ManagerClient) UpdateRuleAccountLimit(ctx context.Context, id string, req types.UpdateRuleAccountLimitRequest) (*types.SubjectRealtimeLimitItem, error) {
+	var out types.SubjectRealtimeLimitItem
+	err := m.client.request(ctx, http.MethodPatch, m.projectPath("usage-control-rules", "limits", id), nil, req, &out)
+	return &out, err
+}
+
 func (m *ManagerClient) DeleteRuleAccountLimit(ctx context.Context, id string) (*types.DeleteRuleAccountLimitResponse, error) {
 	var out types.DeleteRuleAccountLimitResponse
 	err := m.client.request(ctx, http.MethodDelete, m.projectPath("usage-control-rules", "limits", id), nil, nil, &out)

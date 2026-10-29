@@ -612,6 +612,7 @@ type SubjectRealtimeLimitItem struct {
 	SelectorValue   string          `json:"selector_value,omitempty"`
 	Measure         string          `json:"measure,omitempty"`
 	Period          string          `json:"period"`
+	PeriodType      string          `json:"period_type"`
 	WindowID        string          `json:"window_id"`
 	NextResetAt     int64           `json:"next_reset_at,omitempty"`
 	UsedAmount      decimal.Decimal `json:"used_amount"`
@@ -658,4 +659,10 @@ type CreateUsageControlRuleResponse struct {
 type DeleteRuleAccountLimitResponse struct {
 	Deleted bool             `json:"deleted"`
 	Limit   RuleAccountLimit `json:"limit"`
+}
+
+// UpdateRuleAccountLimitRequest exposes only the upper limit. Rule identity is
+// supplied in the URL; usage, window settings and selectors are server-owned.
+type UpdateRuleAccountLimitRequest struct {
+	LimitAmount decimal.Decimal `json:"limit_amount"`
 }

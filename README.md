@@ -70,6 +70,31 @@ account, err := client.Manager.CreateAccount(ctx, types.CreateAccountRequest{Nam
 
 Import `github.com/meterry-com/meterry-go/pkg/types` for request and response types.
 
+To change only a custom limit's upper bound and receive its updated realtime progress:
+
+```go
+snapshot, err := client.Manager.UpdateRuleAccountLimit(ctx, "racl_001", types.UpdateRuleAccountLimitRequest{
+    LimitAmount: decimal.RequireFromString("200"),
+})
+if err != nil {
+    return err
+}
+fmt.Println(snapshot.UsedAmount, snapshot.LimitAmount, snapshot.Exceeded)
+```
+
+Import `github.com/shopspring/decimal` for decimal values. The rule ID is a limit
+ID returned by `ListUsageControlRules` or `ReadSubjectRealtimeLimits`. This calls
+`PATCH /v1/projects/:project_id/usage-control-rules/limits/:id` and requires
+`usage_control:write`. Only active custom rules can be updated, including custom
+rules on a subject that also uses a Plan. The request accepts only `LimitAmount`;
+usage, selectors, cycle mode and reset schedule remain unchanged. A positive
+ceiling below current usage is allowed and returns `Exceeded: true`.
+The result is a `types.SubjectRealtimeLimitItem`, including the rule's dimension
+scope, `PeriodType`, `NextResetAt`, remaining amount and enforcement state.
+
+See the [unreleased SDK roadmap](docs/roadmap/unreleased-2026-10-25.md)
+([中文](docs/roadmap/unreleased-2026-10-25.zh.md)) for this addition.
+
 To issue a short-lived subject JWT, use a project-bound tenant API key with the
 `subject_jwt:grant` scope (`types.TenantAPIKeyScopeSubjectJWTGrant`):
 
