@@ -42,6 +42,14 @@ type ChartPoint struct {
 	Value decimal.Decimal `json:"value"`
 }
 
+// Aggregate queries usage aggregates for the configured project, including
+// per-metric measures, request counts, and cursor pagination.
+func (q *QueryClient) Aggregate(ctx context.Context, req types.UsageAggregateQueryRequest) (*types.UsageAggregateQueryResponse, error) {
+	var out types.UsageAggregateQueryResponse
+	err := q.client.request(ctx, http.MethodPost, q.client.projectPath("usage", "aggregate", "query"), nil, req, &out)
+	return &out, err
+}
+
 func (q *QueryClient) Usage(ctx context.Context, req types.UsageAnalyticsQueryRequest) (*types.UsageAnalyticsQueryResponse, error) {
 	var err error
 	if req, err = normalizeAnalyticsQueryRequest(req); err != nil {
